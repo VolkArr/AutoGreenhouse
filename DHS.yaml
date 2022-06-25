@@ -1,0 +1,80 @@
+esphome:
+  name: dhs
+  platform: ESP32
+  board: nodemcu-32s
+  includes:
+  - testESPhome.h
+
+
+  
+globals:
+  - id: my_global_int
+    type: int
+    restore_value: no
+    initial_value: '0'
+  
+  - id: my_global_string
+    type: std::string
+    restore_value: no  # Strings cannot be saved/restored
+    initial_value: "Hello World"
+
+
+
+wifi:
+  ssid: "your hotspot name"
+  password: "your hotspot pass"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "your ap name"
+    password: "your ap pass"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: "HA api key"
+
+ota:
+  password: "ota pass"
+
+
+number:
+  - platform: template
+    id: "delta_temperature"
+    name: "Разница температур"
+    optimistic: true
+    min_value: 1
+    max_value: 10
+    step: 1
+
+binary_sensor:
+  - platform: template
+    id: "window_state"
+    name: "Статус окна"
+    
+
+
+  
+sensor:
+- platform: custom
+  lambda: |-
+    auto my_sensor = new MyCustomSensor();
+    App.register_component(my_sensor);
+    return {my_sensor->temperature_sensor, my_sensor->humidity_sensor, my_sensor->humidity_ground_sensor};
+
+  sensors:
+  - name: "Temperature"
+    unit_of_measurement: °C
+    accuracy_decimals: 1
+  - name: "Humidity"
+    unit_of_measurement: '%' 
+    accuracy_decimals: 2
+  - name: "Humidity ground"
+    unit_of_measurement: '%' 
+    accuracy_decimals: 2
+  
+  
