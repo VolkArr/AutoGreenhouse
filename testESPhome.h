@@ -5,7 +5,8 @@
 static const char* TAG = "MyCustomComponent";
 hw_timer_t * timer = NULL;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-static const short main_temperature = 25;
+bool timerState = false;
+static const short main_temperature = 27;
 
 
 #define W_OPEN  23
@@ -24,6 +25,7 @@ void IRAM_ATTR onTimer() {
     portENTER_CRITICAL_ISR(&timerMux);
     ledcWrite(0, 0);
     timerStop(timer);
+    timerState = false;
     portEXIT_CRITICAL_ISR(&timerMux);
 }
 
@@ -40,7 +42,7 @@ class MyCustomSensor : public PollingComponent {
     void setup() override {
         timer = timerBegin(0, 80, true);
         timerAttachInterrupt(timer, &onTimer, true);
-        timerAlarmWrite(timer, 60000000, true);
+        timerAlarmWrite(timer, 20000000, true);
         timerAlarmEnable(timer);
         timerStop(timer);
         ledcSetup(pwmConf.ledChannel, pwmConf.freq, pwmConf.resolution);
@@ -53,7 +55,9 @@ class MyCustomSensor : public PollingComponent {
 
         const float temperature = dht.getTemperature();
         if(temperature >= main_temperature){
+            old_temperature = temperature;
             state = true;
+            timerState = true;
             portENTER_CRITICAL(&timerMux);
             timerStart(timer);
             ledcWrite(pwmConf.ledChannel, 255);
@@ -64,7 +68,9 @@ class MyCustomSensor : public PollingComponent {
             id(window_state).publish_state(true);
         }
         else{
+            old_temperature = temperature;
             state = false;
+            timerState = true;
             portENTER_CRITICAL(&timerMux);
             timerStart(timer);
             ledcWrite(pwmConf.ledChannel, 255);
@@ -79,36 +85,42 @@ class MyCustomSensor : public PollingComponent {
     void update() override {
 
         const float temperature = dht.getTemperature();
-        if((temperature - old_temperature < 50 && temperature - old_temperature > -50)
-        && (temperature != old_temperature)){
+        if((temperature - old_temperature < 10 && temperature - old_temperature > -10)
+        && (temperature > old_temperature)){
                         old_temperature = temperature;
                         if((temperature >= main_temperature + id(delta_temperature).state) && !state){
-                            state = true;
-                            portENTER_CRITICAL(&timerMux);
-                            timerStart(timer);
-                            ledcWrite(pwmConf.ledChannel, 255);
-                            digitalWrite(W_OPEN, LOW);
-                            digitalWrite(W_CLOSE, HIGH);
-                            portEXIT_CRITICAL(&timerMux);
+                            if(!timerState){
+                                state = true;
+                                timerState = true;
+                                portENTER_CRITICAL(&timerMux);
+                                timerStart(timer);
+                                ledcWrite(pwmConf.ledChannel, 255);
+                                digitalWrite(W_OPEN, LOW);
+                                digitalWrite(W_CLOSE, HIGH);
+                                portEXIT_CRITICAL(&timerMux);
+                                id(window_state).publish_state(true);
+                            }
                         }
                         temperature_sensor->publish_state(temperature);
-                        id(window_state).publish_state(true);
         }
             
-        if( (temperature - old_temperature < 50 && temperature - old_temperature > -50)
-        && (temperature != old_temperature)){
+        if( (temperature - old_temperature < 10 && temperature - old_temperature > -10)
+        && (temperature < old_temperature)){
                         old_temperature = temperature;
                         if((temperature <= main_temperature - id(delta_temperature).state) && state){
-                            state = false;
-                            portENTER_CRITICAL(&timerMux);
-                            timerStart(timer);
-                            ledcWrite(pwmConf.ledChannel, 255);
-                            digitalWrite(W_CLOSE, LOW);
-                            digitalWrite(W_OPEN, HIGH);
-                            portEXIT_CRITICAL(&timerMux);
+                            if(!timerState){
+                                state = false;
+                                timerState = true;
+                                portENTER_CRITICAL(&timerMux);
+                                timerStart(timer);
+                                ledcWrite(pwmConf.ledChannel, 255);
+                                digitalWrite(W_CLOSE, LOW);
+                                digitalWrite(W_OPEN, HIGH);
+                                portEXIT_CRITICAL(&timerMux);
+                                id(window_state).publish_state(false); 
+                            }    
                         }
                         temperature_sensor->publish_state(temperature);
-                        id(window_state).publish_state(false); 
         }
 
         const float humadity =  dht.getHumidity();
